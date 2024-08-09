@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+  <style>
+    .canvas-wrap {
+      width: 1000px;
+      height: 800px;
+      position: relative;
+      display: inline-block;
+    }
+
+    .canvas-wrap canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+    #imgCanvas {
+      z-index: 2;
+    }
+    #drawCanvas {
+      display: none;
+      z-index: 5;
+    }
+    #saveCanvas {
+      z-index: 4;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="canvas-wrap">
+    <canvas id="imgCanvas"></canvas>
+    <canvas id="drawCanvas"></canvas>
+    <canvas id="saveCanvas"></canvas>
+  </div>
+  <div style="display: inline-block;width: 400px;vertical-align: top;">
+    <button type="button" onclick="startDraw()">开始绘制</button>
+    <button type="button" onclick="showArea()">显示下面路径</button>
+    <textarea id="text" style="height: 200px;width: 100%;"></textarea>
+
+  </div>
+  <script>
+    let canvasWrap, wrapWidth, wrapHeight, imgCanvas, imgCtx, drawCanvas,
+      drawCtx, saveCanvas, saveCtx;
+    let ratio, canvasWidth, canvasHeight, imgWidth, imgHeight, imgUrl;
+    let isDrawing = false;
+    let drawingPoints = [];
+    let drawedPoints = [];
+    let submitData = [];
+
+    // 1. 初始化Canvas画布
+    function initCanvas() {
+      // 获取canvas容器元素并设置宽高
+      canvasWrap = document.getElementsByClassName("canvas-wrap")[0];
+      wrapWidth = canvasWrap.clientWidth;
+      wrapHeight = canvasWrap.clientHeight;
+
+      // 获取canvas元素并获取2D绘图上下文
+      imgCanvas = document.getElementById("imgCanvas");
+      imgCtx = imgCanvas.getContext("2d");
+      drawCanvas = document.getElementById("drawCanvas");
+      drawCtx = drawCanvas.getContext("2d");
+      saveCanvas = document.getElementById("saveCanvas");
+      saveCtx = saveCanvas.getContext("2d");
+    }
+
+    // 2. 初始化图片Canvas
+    function initImgCanvas() {
+      // 计算画布和图片的宽高比
+      let ww = wrapWidth;
+      let wh = wrapHeight;
+      let iw = imgWidth;
+      let ih = imgHeight;
+
+      if (iw / ih < ww / wh) {
+        ratio = ih / wh;
+        canvasHeight = wh;
+        canvasWidth = (wh * iw) / ih;
+      } else {
+        ratio = iw / ww;
+        canvasWidth = ww;
+        canvasHeight = (ww * ih) / iw;
+      }
+
+      // 设置三个canvas的宽高
+      imgCanvas.width = canvasWidth;
+      imgCanvas.height = canvasHeight;
+      drawCanvas.width = canvasWidth;
+      drawCanvas.height = canvasHeight;
+      saveCanvas.width = canvasWidth;
+      saveCanvas.height = canvasHeight;
+
+      // 加载图片并绘制到imgCanvas上
+      let img = document.createElement("img");
+      img.src = imgUrl;
+      img.onload = () => {
+        console.log("图片已加载");
+        imgCtx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
+        renderDatas(); // 渲染已有数据
+      };
+    }
+
+    // 3. 开始绘制
+    function startDraw() {
+      drawCanvas.style.display = 'block';
+      drawingPoints = [];
+      console.log(1234, drawingPoints,drawedPoints);
+      initImgCanvas();
+      if (isDrawing) return;
+      isDrawing = true;
+      
+      // 监听drawCanvas的click、dblclick和mousemove事件
+      drawCanvas.addEventListener("click", drawImageClickFn);
+      drawCanvas.addEventListener("dblclick", drawImageDblClickFn);
+      drawCanvas.addEventListener("mousemove", drawImageMoveFn);
+    }
+    function showArea() {
+      let arr = document.getElementById('text').value;
+      
+      if(arr) arr = JSON.parse(arr);
+      console.log(222,arr);
+      drawSaveArea(arr[0]);
+    }
+
+    // 4. 清空所有绘制区域
+    function clearAll() {
+      saveCtx.clearRect(0, 0, canvasWidth, canvasHeight);
+      drawedPoints = [];
+    }
+
+    // 5. 获取并加载图片
+    function getImage() {
+      imgUrl = "/pdf-icon.png";
+      imgWidth = 1000;
+      imgHeight = 800;
+      imgUrl && initImgCanvas();
+    }
+
+    // 6. 点击事件,记录点坐标
+    function drawImageClickFn(e) {
+      if (e.offsetX || e.layerX) {
+        let pointX = e.offsetX == undefined ? e.layerX : e.offsetX;
+        let pointY = e.offsetY == undefined ? e.layerY : e.offsetY;
+        let lastPoint = drawingPoints[drawingPoints.length - 1] || [];
+        if (lastPoint[0] !== pointX || lastPoint[1] !== pointY) {
+          for(let i=0;i < drawingPoints.length ; i++) {
+            const item = drawingPoints[i];
+            if(((pointX - 4) < item[0] && item[0] < (pointX + 4)) && ((pointY-4) < item[1] && item[1] < (pointY + 4))) {
+              drawImageDblClickFn(e)
+              break;
+            }
+          }
+          drawingPoints.push([pointX, pointY]);
+          
+        }
+      }
+    }
+
+    // 7. 鼠标移动事件,实时绘制区域
+    function drawImageMoveFn(e) {
+      if (e.offsetX || e.layerX) {
+        let pointX = e.offsetX == undefined ? e.layerX : e.offsetX;
+        let pointY = e.offsetY == undefined ? e.layerY : e.offsetY;
+        drawCtx.clearRect(0, 0, canvasWidth, canvasHeight);
+
+        drawCtx.fillStyle = "red";
+        drawingPoints.forEach((item, i) => {
+          drawCtx.beginPath();
+          drawCtx.arc(...item, 4, 0, 180);
+          drawCtx.fill();
+        });
+
+        drawCtx.save();
+        drawCtx.beginPath();
+        drawingPoints.forEach((item, i) => {
+          drawCtx.lineTo(...item);
+        });
+        drawCtx.lineTo(pointX, pointY);
+        drawCtx.lineWidth = "2";
+        drawCtx.strokeStyle = "red";
+        drawCtx.fillStyle = "rgba(255, 0, 0, 0.3)";
+        drawCtx.stroke();
+        drawCtx.fill();
+        drawCtx.restore();
+      }
+    }
+
+    // 8. 双击事件,完成当前区域绘制
+    function drawImageDblClickFn(e) {
+      if (e.offsetX || e.layerX) {
+        let pointX = e.offsetX == undefined ? e.layerX : e.offsetX;
+        let pointY = e.offsetY == undefined ? e.layerY : e.offsetY;
+        let lastPoint = drawingPoints[drawingPoints.length - 1] || [];
+        if (lastPoint[0] !== pointX || lastPoint[1] !== pointY) {
+          drawingPoints.push([pointX, pointY]);
+        }
+      }
+      drawCtx.clearRect(0, 0, canvasWidth, canvasHeight);
+      drawSaveArea(drawingPoints);
+
+      drawedPoints.push(drawingPoints);
+      drawingPoints = [];
+      isDrawing = false;
+      console.log(222,drawedPoints);
+      drawCanvas.style.display = 'none';
+      document.getElementById('text').value = JSON.stringify(drawedPoints);
+      drawCanvas.removeEventListener("click", drawImageClickFn);
+      drawCanvas.removeEventListener("dblclick", drawImageDblClickFn);
+      drawCanvas.removeEventListener("mousemove", drawImageMoveFn);
+    }
+
+    // 9. 绘制区域到saveCanvas
+    function drawSaveArea(points) {
+      if (points.length === 0) return;
+      console.log(points);
+      saveCtx.save();
+      saveCtx.beginPath();
+      points.forEach((item, i) => {
+        saveCtx.lineTo(...item);
+      });
+      saveCtx.closePath();
+      saveCtx.lineWidth = "2";
+      saveCtx.fillStyle = "rgba(255,0, 255, 0.3)";
+      saveCtx.strokeStyle = "red";
+      saveCtx.stroke();
+      saveCtx.fill();
+      saveCtx.restore();
+    }
+
+    // 10. 保存绘制数据
+    function savePoints() {
+      let objectPoints = [];
+      objectPoints = drawedPoints.map((area) => {
+        let polygon = {};
+        area.forEach((point, i) => {
+          polygon[`x${i + 1}`] = Math.round(point[0] * ratio);
+          polygon[`y${i + 1}`] = Math.round(point[1] * ratio);
+        });
+        return {
+          polygon: polygon,
+        };
+      });
+      submitData = objectPoints;
+      console.log("最终提交数据", objectPoints);
+    }
+
+    // 11. 渲染已有数据
+    function renderDatas() {
+      drawedPoints = submitData.map((item) => {
+        let polygon = item.polygon;
+        let points = [];
+        for (let i = 1; i < Object.keys(polygon).length / 2 + 1; i++) {
+          if (!isNaN(polygon[`x${i}`]) && !isNaN(polygon[`y${i}`])) {
+            points.push([
+              polygon[`x${i}`] / ratio, // 根据ratio换算canvas坐标
+              polygon[`y${i}`] / ratio,
+            ]);
+          }
+        }
+        drawSaveArea(points); // 调用drawSaveArea将区域绘制到saveCanvas上
+        return points;
+      });
+    }
+
+    // 使用方式
+    initCanvas(); // 1. 初始化Canvas画布
+    getImage(); // 5. 获取并加载图片 
+    // startDraw(); // 3. 开始绘制
+
+  </script>
+</body>
+
+</html>
